@@ -134,6 +134,7 @@ ui <- navbarPage(strong("Lyrics Analysis"),
   tabPanel("Data", 
            DT::dataTableOutput("table"))
 )
+
 ```
 
 
@@ -203,6 +204,82 @@ server <- function(input, output) {
 shinyApp(ui, server)
 ```
 
+
+
+```{r}
+lyrics <-dt_lyrics
+library(stringr)
+lyrics.1 <- lyrics %>%
+  unnest_tokens(word, stemmedwords) %>%
+  select(-lyrics,-id)
+
+bing <- get_sentiments("bing")
+
+lyrics.2 <- lyrics.1 %>%
+  inner_join(bing)
+# lyrics.2 <- lyrics.1 %>%
+#   left_join(bing)
+# sum(is.na(lyrics.2$sentiment)) / nrow(lyrics.2) # check how many are missing 80% are matched
+lyrics.2 <- lyrics.2 %>%
+  mutate(sentiment = ifelse(sentiment =="positive", 1, -1)) %>%
+  filter(year > 1960)
+ 
+lyrics.3 <- lyrics.2 %>%
+  group_by(song,year,artist,genre) %>%
+  summarize(n = sum(sentiment))
+
+### divide by decade  
+lyrics.decade <- lyrics.3 %>%
+  mutate(decade = cut(year, seq(1960, 2020, by = 10), paste0(seq(1960, 2010, by = 10),"s"), include.lowest = T, right = F)) 
+
+# extremely negative
+# lyrics.decade[lyrics.decade$n  < -200,]
+lyrics.decade <- lyrics.decade %>% filter(n >-100)
+# distribution of magnitute
+g1 <- ggplot(lyrics.decade) +
+  geom_histogram(aes(n), bins = 40)
+g1
+# by genre
+g1 + facet_wrap(~genre)
+# by decade
+g1 + facet_wrap(~decade)
+
+
+# frequency
+lyrics.freq <- lyrics.2 %>% 
+  group_by(word) %>%
+  summarize(count = sum(sentiment)) %>%
+  arrange(desc(count))
+
+## Most positive and negative words
+lyrics.freq %>%
+  mutate(n = row_number())%>%
+  filter(n <15 | n > length(n)-15) %>% 
+  mutate(sentiment = ifelse(count >0, "positive", "negative")) %>%
+  mutate(word = reorder(word, count)) %>%
+  ggplot(aes(word, count, fill = sentiment)) +
+  geom_col() +
+  coord_flip() +
+  labs(y = "Contribution to sentiment")
+
+# word cloud
+library(wordcloud)
+lyrics.freq %>%
+  with(wordcloud(word, abs(count), max.words = 100))
+lyrics.freq %>%
+  filter(word != "love") %>%
+  with(wordcloud(word, abs(count), max.words = 100))
+
+# divide by sentiment
+library(reshape2)
+lyrics.freq %>%
+  mutate(sentiment = ifelse(count >0, "positive", "negative")) %>%
+  filter(word != "love") %>%
+  acast(word ~ sentiment, value.var = "count", fill = 0) %>%
+  comparison.cloud(colors = c("#F8766D", "#00BFC4"), max.words = 50)
+
+
+```
 
 
 

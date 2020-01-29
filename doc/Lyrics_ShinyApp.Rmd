@@ -213,43 +213,91 @@ lyrics.1 <- lyrics %>%
   unnest_tokens(word, stemmedwords) %>%
   select(-lyrics,-id)
 
+
+##### Sentiment
 bing <- get_sentiments("bing")
 
 lyrics.2 <- lyrics.1 %>%
   inner_join(bing)
 # lyrics.2 <- lyrics.1 %>%
-#   left_join(bing)
+# left_join(bing)
 # sum(is.na(lyrics.2$sentiment)) / nrow(lyrics.2) # check how many are missing 80% are matched
-lyrics.2 <- lyrics.2 %>%
-  mutate(sentiment = ifelse(sentiment =="positive", 1, -1)) %>%
+lyrics.dir <- lyrics.2 %>%
+  mutate(dir = ifelse(sentiment =="positive", 1, -1)) %>%
   filter(year > 1960)
  
-lyrics.3 <- lyrics.2 %>%
+lyrics.count <- lyrics.dir %>%
   group_by(song,year,artist,genre) %>%
-  summarize(n = sum(sentiment))
+  summarize(n = sum(dir))
 
-### divide by decade  
-lyrics.decade <- lyrics.3 %>%
+# divide by decade  
+lyrics.decade <- lyrics.count %>%
   mutate(decade = cut(year, seq(1960, 2020, by = 10), paste0(seq(1960, 2010, by = 10),"s"), include.lowest = T, right = F)) 
 
-# extremely negative
-# lyrics.decade[lyrics.decade$n  < -200,]
-lyrics.decade <- lyrics.decade %>% filter(n >-100)
-# distribution of magnitute
 g1 <- ggplot(lyrics.decade) +
   geom_histogram(aes(n), bins = 40)
 g1
+### extremely negative case
+# lyrics.decade[lyrics.decade$n  < -200,]
+lyrics.decade.wo.ext <- lyrics.decade %>% filter(between(n,-100,100))
+
+
+# distribution of sentiments
+g2 <- ggplot(lyrics.decade.wo.ext) +
+  geom_histogram(aes(n), bins = 100)
+g2
 # by genre
-g1 + facet_wrap(~genre)
+g2 + facet_wrap(~genre) 
+### extremely negative : hip hop, indie, metal
+### little positive : jazz
+# genre & decade
+g2 + facet_wrap(decade~genre) 
+
 # by decade
-g1 + facet_wrap(~decade)
+g2 + facet_wrap(~decade)
+### generally negative
 
 
+
+# counts by genre
+lyrics.decade %>% 
+  ungroup() %>%
+  count(genre) %>% 
+  ggplot() +
+  geom_bar(aes(genre, n, color = genre,fill = genre),  stat = "identity") +
+  theme(axis.text.x = element_text(angle = 45))
+
+## counts by decade
+lyrics.decade %>% 
+  ungroup() %>%
+  count(decade)
+
+## counts by year in 2000s
+lyrics.decade %>%
+  ungroup() %>%
+  filter(decade == "2000s") %>%
+  count(year)
+
+lyrics.decade %>%
+  ungroup() %>%
+  filter(year %in% c(2006,2007)) %>%
+  group_by(genre) %>%
+  count(year) %>%
+  ggplot(aes(genre,n)) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~year)+
+  theme(axis.text.x = element_text(angle = 45))
+
+```
+
+## frequency cloud
+```{r}
 # frequency
-lyrics.freq <- lyrics.2 %>% 
+lyrics.freq <- lyrics.dir %>% 
   group_by(word) %>%
-  summarize(count = sum(sentiment)) %>%
+  summarize(count = sum(dir)) %>%
   arrange(desc(count))
+
 
 ## Most positive and negative words
 lyrics.freq %>%
@@ -283,4 +331,19 @@ lyrics.freq %>%
 
 
 
+#artist
+```{r}
+
+dt_artist$Intro[1]
+dt_artist$Formed[1000]
+dt_artist %>% mutate(Origin = ifelse(Origin == "", NA, Origin)) %>% count(Origin) %>% arrange(desc(n))
+
+unique(dt_artist$Artist)
+unique(dt_lyrics$artist)
+dt_artist$Formed %>% is.na() %>% sum()
+(dt_artist$Members == "") %>% sum()
+dt_artist %>% filter(Members != ""  ) %>% filter(!is.na(Formed)) %>% nrow()
+sum(dt_artist$Origin == "")
+nrow(dt_artist)
+```
 
